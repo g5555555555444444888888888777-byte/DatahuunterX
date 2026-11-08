@@ -2,64 +2,48 @@ import streamlit as st
 import requests
 import pandas as pd
 
-st.set_page_config(page_title="DataHunterX Dashboard", page_icon="🚀", layout="wide")
+st.set_page_config(
+    page_title="DataHunterX - Real-time Crypto AI Quantitative Dashboard",
+    page_icon="⚡",
+    layout="wide"
+)
 
-st.title("🚀 DataHunterX - Real-time Crypto AI Quantitative Dashboard")
-st.caption("Automated Data Monitoring | Direct Binance API | AI Multi-factor & Reversal Radar")
+st.title("DataHunterX - Real-time Crypto AI Quantitative Dashboard")
+st.markdown("Automated Data Monitoring | Direct Binance API | AI Multi-factor & Reversal Radar")
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("📢 Join DataHunterX Community")
-st.sidebar.write("Get real-time automated alerts every minute!")
-st.sidebar.link_button("🔥 Join Discord Server", "https://discord.gg/q8VCzMBtC")
+st.sidebar.markdown("### Join DataHunterX Community")
+st.sidebar.markdown("Get real-time automated alerts every minute!")
+st.sidebar.button("Join Discord Server", on_click=lambda: st.write("https://discord.gg/QBCbTC"))
 
-@st.cache_data(ttl=15)
-def fetch_market_data():
-    ticker_url = "https://api.binance.com/api/v3/ticker/24hr"
-    premium_url = "https://fapi.binance.com/fapi/v1/premiumIndex"
-    
-    tickers = requests.get(ticker_url).json()
-    premiums = requests.get(premium_url).json()
-    
-    premium_map = {item['symbol']: float(item.get('lastFundingRate', 0)) * 100 for item in premiums}
-    
-    targets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT"]
-    list_data = []
-    
-    for coin in tickers:
-        if coin['symbol'] in targets:
-            symbol = coin['symbol'].replace("USDT", "")
-            price = float(coin['lastPrice'])
-            change = float(coin['priceChangePercent'])
-            funding = premium_map.get(coin['symbol'], 0.0)
+def get_crypto_data():
+    url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+    try:
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        
+        if not isinstance(data, (dict, list)):
+            st.error(f"API Error: {response.text[:200]}")
+            return pd.DataFrame()
             
-            if change > 3:
-                if funding > 0.05:
-                    ai_signal = "⚠️ Warning: Overheat / Short Alert"
-                    advice = "High funding rate during pump, watch out for reversal!"
-                else:
-                    ai_signal = "🟢 Green: Long"
-                    advice = "Healthy pump."
-            elif change < -3:
-                ai_signal = "🔴 Red: Short"
-                advice = "Strong dump, trend turning down."
-            else:
-                ai_signal = "⚪ Neutral"
-                advice = "Keep watching."
-                
-            list_data.append({
-                "Symbol": symbol,
-                "Price ($)": f"${price:,.2f}",
-                "24h Change": f"{change:+.2f}%",
-                "Funding Rate": f"{funding:.4f}%",
-                "AI Signal": ai_signal,
-                "Strategy Advice": advice
-            })
-            
-    return pd.DataFrame(list_data)
+        df = pd.DataFrame(data)
+        return df
+    except Exception as e:
+        st.error(f"Data update failed: {str(e)}")
+        return pd.DataFrame()
 
-try:
-    df = fetch_market_data()
-    st.subheader("📊 Real-time Market & Chip Radar")
-    st.dataframe(df, use_container_width=True)
-except Exception as e:
-    st.error(f"Data update failed: {e}")
+df = get_crypto_data()
+
+if not df.empty and 'symbol' in df.columns:
+    st.success("Data loaded successfully!")
+    
+    usdt_df = df[df['symbol'].str.endswith('USDT')].copy()
+    
+    numeric_cols = ['lastPrice', 'priceChangePercent', 'volume']
+    for col in numeric_cols:
+        if col in usdt_df.columns:
+            usdt_df[col] = pd.to_numeric(usdt_df[col], errors='coerce')
+            
+    st.subheader("🔥 Binance Futures 24hr Price Change Radar")
+    st.dataframe(usdt_df[['symbol', 'lastPrice', 'priceChangePercent', 'volume']].head(20), use_container_width=True)
+else:
+    st.warning("Failed to fetch Binance data. Please refresh later.")
